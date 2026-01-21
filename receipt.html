@@ -56,9 +56,10 @@
 
   <script>
     // ABI tối thiểu cho hàm đọc phiếu
-    const ABI = [
-      "function ChiTietPhieuMua(uint256 _maPhieu) view returns (uint256 maPhieu, address chuSoHuu, address chuSoHuuCu, string tenKhachHang, string soDienThoai, string[] danhSachSanPham, uint256[] giaSanPham, uint256[] BaoHanhTheoThang, uint256 tongTien, uint256 thoiDiemMua, bool dangTranhChap, bool dangChuyenNhuong)"
-    ];
+  const ABI = [
+  "function ChiTietPhieuMuaPublic(uint256 _maPhieu) view returns (uint256 maPhieu, address chuSoHuu, address chuSoHuuCu, string tenKhachHang, string soDienThoai, string[] danhSachSanPham, uint256[] giaSanPham, uint256[] BaoHanhTheoThang, uint256 tongTien, uint256 thoiDiemMua, bool dangTranhChap, bool dangChuyenNhuong)"
+];
+;
 
     const $ = (id) => document.getElementById(id);
     function setStatus(msg) { $("status").textContent = msg; }
@@ -113,7 +114,8 @@ const provider = await getWorkingProvider();
       const contract = new ethers.Contract(caddr, ABI, provider);
 
       setStatus("Đang tải dữ liệu phiếu từ blockchain...");
-      const r = await contract.ChiTietPhieuMua(id);
+      const r = await contract.ChiTietPhieuMuaPublic(id);
+
 
       // r là tuple theo ABI
       $("content").style.display = "block";
@@ -155,5 +157,6 @@ const provider = await getWorkingProvider();
   </script>
 </body>
 </html>
+
 
 
