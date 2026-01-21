@@ -82,10 +82,12 @@
 
   <script>
     // ABI tối thiểu chỉ cần các hàm bạn dùng
-    const ABI = [
-      "function taoPhieuMuaTheoSoThuTu(address _khach, string _tenKhach, string _soDT, uint256[] _indexSP) external",
-      "function demPhieu() view returns (uint256)"
-    ];
+  const ABI = [
+  "function taoPhieuMuaTheoSoThuTu(address _khach, string _tenKhach, string _soDT, uint256[] _indexSP) public",
+  "function demPhieu() view returns (uint256)",
+  "function cuaHangAdmin() view returns (address)"
+];
+
 
     let provider, signer;
 
@@ -175,6 +177,7 @@
   </script>
 </body>
 </html>
+
 
 
 
