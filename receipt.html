@@ -3,284 +3,152 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Phiếu mua sắm</title>
+  <title>Admin - Tạo phiếu & QR</title>
   <style>
     body { font-family: system-ui, Arial; max-width: 980px; margin: 24px auto; padding: 0 12px; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-top: 12px; }
-    .muted { color:#666; }
-    .err { color:#b00020; white-space: pre-wrap; }
-    table { width:100%; border-collapse: collapse; }
-    th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; flex: 1; min-width: 320px; }
+    label { display:block; margin: 10px 0 6px; font-weight: 600; }
+    input, textarea { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ccc; }
+    button { padding: 10px 14px; border-radius: 10px; border: 0; cursor: pointer; }
+    button.primary { background: #2563eb; color: white; }
+    .muted { color:#666; font-size: 14px; }
+    .ok { color: #0a7a2f; }
+    .err { color: #b00020; white-space: pre-wrap; }
+    #qrcode { margin-top: 12px; }
     code { background:#f6f6f6; padding: 2px 6px; border-radius: 6px; }
-    .btn { margin-top:10px;padding:10px 14px;border-radius:10px;border:0;cursor:pointer; }
-    .btnPrimary { background:#2563eb;color:#fff; }
-    .btnDark { background:#111827;color:#fff; }
-    .btnDisabled { opacity:0.6; cursor:not-allowed; }
   </style>
 </head>
 <body>
-  <h2>Phiếu mua sắm</h2>
+  <h1>HELLO TEST</h1>
+  <h2>Admin tạo phiếu mua → tự hiện QR</h2>
   <p class="muted">
-    Trang này đọc dữ liệu từ blockchain (Sepolia). Nếu bạn mở bằng điện thoại, không cần MetaMask vẫn xem được.
+    Web này tạo phiếu trên Sepolia bằng MetaMask. Xong sẽ tạo QR dẫn đến <code>receipt.html</code> để khách quét.
   </p>
 
-  <div class="card">
-    <div><b>Contract:</b> <code id="caddr"></code></div>
-    <div><b>Mã phiếu:</b> <code id="pid"></code></div>
-    <p id="status" class="muted"></p>
-    <p id="error" class="err"></p>
-  </div>
+  <div class="row">
+    <div class="card">
+      <h3>1) Kết nối & cấu hình</h3>
+      <button class="primary" id="btnConnect">Kết nối MetaMask</button>
+      <p class="muted">Ví hiện tại: <span id="addr">Chưa kết nối</span></p>
 
-  <div id="content" class="card" style="display:none;">
-    <h3>Chi tiết phiếu</h3>
-    <div><b>Chủ sở hữu:</b> <code id="owner"></code></div>
-    <div><b>Tên khách:</b> <span id="name"></span></div>
-    <div><b>SĐT:</b> <span id="phone"></span></div>
-    <div><b>Tổng tiền:</b> <span id="total"></span></div>
-    <div><b>Thời điểm mua (unix):</b> <span id="time"></span></div>
-    <div><b>Tranh chấp:</b> <span id="dispute"></span></div>
-    <div><b>Chuyển nhượng:</b> <span id="transfer"></span></div>
+      <label>Contract Address (Sepolia)</label>
+      <input id="contractAddr" placeholder="0x..." />
 
-    <hr style="margin:16px 0; border:none; border-top:1px solid #eee;" />
+      <label>Receipt Page URL (đường dẫn receipt.html)</label>
+      <input id="receiptBase" placeholder="Ví dụ: https://YOURNAME.github.io/qr-receipt/receipt.html" />
 
-    <h3>Thanh toán</h3>
-    <div><b>Còn lại cần trả:</b> <span id="remain">...</span></div>
+      <p class="muted">
+        Tip: Nếu bạn host trên GitHub Pages thì receipt url sẽ dạng:
+        <code>https://username.github.io/repo/receipt.html</code>
+      </p>
+    </div>
 
-    <button id="btnPay" class="btn btnPrimary">Thanh toán bằng MetaMask</button>
-    <button id="btnOpenMM" class="btn btnDark" style="display:none;">Mở trang này trong MetaMask</button>
+    <div class="card">
+      <h3>2) Nhập dữ liệu phiếu</h3>
+      <label>Số phiếu</label>
+      <input id="receiptId" placeholder="Ví dụ: 1" />
+      <button class="primary" id="btnCreate">Tạo QR</button>
+      <p id="status" class="muted"></p>
+      <p id="error" class="err"></p>
+    </div>
 
-    <p id="payStatus" class="muted"></p>
-    <p id="payError" class="err"></p>
-
-    <h4>Danh sách sản phẩm</h4>
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Tên SP</th>
-          <th>Giá</th>
-          <th>Bảo hành (tháng)</th>
-        </tr>
-      </thead>
-      <tbody id="rows"></tbody>
-    </table>
+    <div class="card">
+      <h3>3) QR cho khách quét</h3>
+      <div class="muted">Link QR:</div>
+      <textarea id="qrLink" rows="3" readonly></textarea>
+      <div id="qrcode"></div>
+      <p class="muted">
+        Khách quét QR → mở receipt.html → web đọc blockchain và hiển thị phiếu.
+      </p>
+    </div>
   </div>
 
   <!-- ethers v6 -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+  <!-- QRCode.js -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
   <script>
-    const ABI = [
-      "function ChiTietPhieuMuaPublic(uint256 _maPhieu) view returns (uint256 maPhieu, address chuSoHuu, address chuSoHuuCu, string tenKhachHang, string soDienThoai, string[] danhSachSanPham, uint256[] giaSanPham, uint256[] BaoHanhTheoThang, uint256 tongTien, uint256 thoiDiemMua, bool dangTranhChap, bool dangChuyenNhuong)",
-      "function soTienConLai(uint256 _maPhieu) view returns (uint256)",
-      "function payInvoice(uint256 _maPhieu) payable"
-    ];
-
+    let provider, signer;
     const $ = (id) => document.getElementById(id);
-    function setStatus(msg) { $("status").textContent = msg; }
-    function setError(msg="") { $("error").textContent = msg; }
 
-    function setPayStatus(msg) { $("payStatus").textContent = msg; }
-    function setPayError(msg="") { $("payError").textContent = msg; }
+    function setStatus(msg, ok = true) {
+      $("status").textContent = msg;
+      $("status").className = ok ? "muted ok" : "muted";
+    }
 
-    function fmtVND(x) {
+    function setError(msg = "") {
+      $("error").textContent = msg;
+    }
+
+    async function connect() {
       try {
-        const n = BigInt(x.toString());
-        return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " đ";
-      } catch { return String(x); }
-    }
-    function fmtWeiToEth(weiBigInt) {
-      try { return ethers.formatEther(weiBigInt); } catch { return ""; }
-    }
-
-    // ===== MetaMask deep link =====
-    function openInMetaMask() {
-      const currentUrl = window.location.href;
-      const deep = "https://metamask.app.link/dapp/" + currentUrl.replace(/^https?:\/\//, "");
-      window.location.href = deep;
-    }
-
-    // ===== connect & pay =====
-    let mmProvider, signer;
-
-    async function connectMetaMaskSepolia() {
-      if (!window.ethereum) throw new Error("Chưa có MetaMask (hãy mở link trong MetaMask Browser).");
-
-      mmProvider = new ethers.BrowserProvider(window.ethereum);
-      await mmProvider.send("eth_requestAccounts", []);
-      signer = await mmProvider.getSigner();
-
-      const net = await mmProvider.getNetwork();
-      if (Number(net.chainId) !== 11155111) {
-        throw new Error("Bạn đang không ở mạng Sepolia. Hãy chuyển MetaMask sang Sepolia rồi thử lại.");
-      }
-    }
-
-    async function loadRemain(contractRead, idNum) {
-      const remain = await contractRead.soTienConLai(idNum);
-      $("remain").textContent = `${fmtVND(remain)} (≈ ${fmtWeiToEth(remain)} ETH)`;
-      return remain;
-    }
-
-    async function payNow(caddr, idNum, remainWei) {
-      setPayError("");
-      setPayStatus("Đang mở MetaMask để thanh toán...");
-
-      await connectMetaMaskSepolia();
-      const contractWrite = new ethers.Contract(caddr, ABI, signer);
-
-      setPayStatus("Chờ bạn bấm Confirm trên MetaMask...");
-      const tx = await contractWrite.payInvoice(idNum, { value: remainWei });
-
-      setPayStatus("Đã gửi giao dịch. Đang chờ mining...");
-      await tx.wait();
-
-      setPayStatus("Thanh toán thành công ✅");
-    }
-
-    // ===== RPC read provider =====
-    const RPCS = [
-      "https://ethereum-sepolia-rpc.publicnode.com",
-      "https://sepolia.drpc.org",
-      "https://rpc.sepolia.org"
-    ];
-
-    async function getWorkingProvider() {
-      for (const url of RPCS) {
-        try {
-          const p = new ethers.JsonRpcProvider(url);
-          await p.getBlockNumber();
-          console.log("Using RPC:", url);
-          return p;
-        } catch (e) {
-          console.warn("RPC failed:", url, e);
+        if (!window.ethereum) {
+          setError("Chưa có MetaMask. Cài MetaMask rồi thử lại.");
+          return;
         }
+
+        provider = new ethers.BrowserProvider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = await provider.getSigner();
+
+        const addr = await signer.getAddress();
+        $("addr").textContent = addr;
+
+        setError("");
+        setStatus("Đã kết nối MetaMask ✔");
+      } catch (e) {
+        console.error(e);
+        setError(e?.message || String(e));
+        setStatus("Kết nối MetaMask lỗi ❌", false);
       }
-      throw new Error("Không gọi được RPC Sepolia từ trình duyệt. Hãy đổi mạng hoặc dùng RPC riêng (Alchemy/Infura).");
     }
 
-    async function main() {
-      const params = new URLSearchParams(location.search);
-      const caddr = params.get("c");
-      const id = params.get("id");
+    function createQRFromReceiptId() {
+      setError("");
 
-      $("caddr").textContent = caddr || "";
-      $("pid").textContent = id || "";
+      const contractAddr = $("contractAddr").value.trim();
+      const receiptBase  = $("receiptBase").value.trim();
+      const receiptIdRaw = $("receiptId").value.trim();
 
-      if (!caddr || !ethers.isAddress(caddr)) return setError("Thiếu hoặc sai contract address (tham số ?c=...).");
-      if (!id || isNaN(Number(id))) return setError("Thiếu hoặc sai mã phiếu (tham số ?id=...).");
-
-      // ===== UI: nếu không có provider thì chuyển sang nút OpenMM =====
-      const hasProvider = typeof window.ethereum !== "undefined";
-      const btnPay = $("btnPay");
-      const btnOpenMM = $("btnOpenMM");
-
-      btnOpenMM.onclick = openInMetaMask;
-
-      if (!hasProvider) {
-        // Ẩn nút thanh toán (vì bấm cũng lỗi)
-        btnPay.classList.add("btnDisabled");
-        btnPay.disabled = true;
-
-        // Hiện nút mở MetaMask
-        btnOpenMM.style.display = "inline-block";
-
-        setPayError("Bạn đang mở bằng trình duyệt thường. Hãy bấm “Mở trang này trong MetaMask” để thanh toán.");
-        // Nếu bạn muốn auto nhảy luôn, mở dòng dưới:
-        // setTimeout(openInMetaMask, 600);
-      } else {
-        // Có MetaMask => ẩn nút OpenMM
-        btnOpenMM.style.display = "none";
+      if (!ethers.isAddress(contractAddr)) {
+        setStatus("Có lỗi khi tạo QR ❌", false);
+        return setError("Contract Address không hợp lệ.");
       }
 
-      setStatus("Đang kết nối RPC Sepolia...");
-      const provider = await getWorkingProvider();
-      const contract = new ethers.Contract(caddr, ABI, provider);
-      const idNum = BigInt(id);
-
-      setStatus("Đang tải dữ liệu phiếu từ blockchain...");
-      const r = await contract.ChiTietPhieuMuaPublic(idNum);
-
-      $("content").style.display = "block";
-      $("owner").textContent = r.chuSoHuu;
-      $("name").textContent = r.tenKhachHang;
-      $("phone").textContent = r.soDienThoai;
-      $("total").textContent = fmtVND(r.tongTien);
-      $("time").textContent = r.thoiDiemMua.toString();
-      $("dispute").textContent = r.dangTranhChap ? "Có" : "Không";
-      $("transfer").textContent = r.dangChuyenNhuong ? "Có" : "Không";
-
-      const rows = $("rows");
-      rows.innerHTML = "";
-      for (let i = 0; i < r.danhSachSanPham.length; i++) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${i+1}</td>
-          <td>${r.danhSachSanPham[i]}</td>
-          <td>${fmtVND(r.giaSanPham[i])}</td>
-          <td>${r.BaoHanhTheoThang[i].toString()}</td>
-        `;
-        rows.appendChild(tr);
+      if (!receiptBase.startsWith("http")) {
+        setStatus("Có lỗi khi tạo QR ❌", false);
+        return setError("Receipt Page URL phải là link đầy đủ (https://...).");
       }
 
-      // ===== Payment logic =====
-      setPayStatus("");
-      if (r.dangTranhChap) {
-        $("remain").textContent = "Phiếu đang tranh chấp — không cho thanh toán";
-        btnPay.disabled = true;
-        btnPay.classList.add("btnDisabled");
-      } else {
-        let remainWei = await loadRemain(contract, idNum);
-
-        if (remainWei === 0n) {
-          setPayStatus("Phiếu đã thanh toán đủ ✅");
-          btnPay.disabled = true;
-          btnPay.classList.add("btnDisabled");
-        } else {
-          btnPay.onclick = async () => {
-            try {
-              setPayError("");
-              setPayStatus("");
-
-              if (typeof window.ethereum === "undefined") {
-                // không có provider thì mở MetaMask luôn
-                openInMetaMask();
-                return;
-              }
-
-              // đọc lại remain trước khi trả
-              remainWei = await loadRemain(contract, idNum);
-              if (remainWei === 0n) {
-                setPayStatus("Phiếu đã thanh toán đủ ✅");
-                btnPay.disabled = true;
-                btnPay.classList.add("btnDisabled");
-                return;
-              }
-
-              await payNow(caddr, idNum, remainWei);
-
-              // refresh remain
-              remainWei = await loadRemain(contract, idNum);
-              if (remainWei === 0n) {
-                btnPay.disabled = true;
-                btnPay.classList.add("btnDisabled");
-              }
-            } catch (e) {
-              console.error(e);
-              setPayError(e?.shortMessage || e?.message || String(e));
-              setPayStatus("Thanh toán lỗi ❌");
-            }
-          };
-        }
+      const n = Number(receiptIdRaw);
+      if (!Number.isInteger(n) || n <= 0) {
+        setStatus("Có lỗi khi tạo QR ❌", false);
+        return setError("Số phiếu phải là số nguyên dương (vd: 1).");
       }
 
-      setStatus("Tải xong ✅");
+      // ✅ tạo link QR trỏ thẳng tới phiếu đã có sẵn
+      const url = `${receiptBase}?c=${contractAddr}&id=${n}`;
+      $("qrLink").value = url;
+
+      // ✅ render QR
+      $("qrcode").innerHTML = "";
+      new QRCode($("qrcode"), { text: url, width: 220, height: 220 });
+
+      setStatus(`Đã tạo QR cho phiếu #${n} ✅`, true);
     }
 
-    main().catch(e => {
-      console.error(e);
-      setError(e?.shortMessage || e?.message || String(e));
-      setStatus("Có lỗi khi tải phiếu ❌");
+    $("btnConnect").addEventListener("click", connect);
+
+    $("btnCreate").addEventListener("click", () => {
+      try {
+        createQRFromReceiptId();
+      } catch (e) {
+        console.error(e);
+        setError(e?.message || String(e));
+        setStatus("Có lỗi khi tạo QR ❌", false);
+      }
     });
   </script>
 </body>
