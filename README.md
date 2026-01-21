@@ -1,0 +1,2 @@
+# qr-receipt
+Tạo QR
