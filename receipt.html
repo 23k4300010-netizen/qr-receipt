@@ -8,16 +8,30 @@
     body { font-family: system-ui, Arial; max-width: 980px; margin: 24px auto; padding: 0 12px; }
     .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-top: 12px; }
     .muted { color:#666; }
+    .ok { color:#0a7a2f; }
     .err { color:#b00020; white-space: pre-wrap; }
     table { width:100%; border-collapse: collapse; }
     th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
-    code { background:#f6f6f6; padding: 2px 6px; border-radius: 6px; }
+    code { background:#f6f6f6; padding: 2px 6px; border-radius: 6px; word-break: break-all; }
+    .btn { margin-top:10px; padding:10px 14px; border-radius:10px; border:0; cursor:pointer; }
+    .btnPrimary { background:#2563eb; color:#fff; }
+    .btnDark { background:#111827; color:#fff; }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+    .row2 { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .pill { display:inline-block; padding:4px 10px; border:1px solid #eee; border-radius:999px; background:#fafafa; }
+    .list { margin: 10px 0 0; padding: 0; list-style: none; }
+    .list li { display:flex; gap:10px; align-items:center; justify-content:space-between; padding:10px; border:1px solid #eee; border-radius:10px; margin-top:8px; }
+    .list .left { display:flex; flex-direction:column; gap:2px; }
+    .list .title { font-weight:600; }
+    .list .sub { color:#666; font-size: 13px; }
+    hr { margin:16px 0; border:none; border-top:1px solid #eee; }
   </style>
 </head>
 <body>
   <h2>Phiếu mua sắm</h2>
   <p class="muted">
-    Trang này đọc dữ liệu từ blockchain (Sepolia). Nếu bạn mở bằng điện thoại, không cần MetaMask vẫn xem được.
+    Trang này đọc dữ liệu từ blockchain (Sepolia). Không cần MetaMask vẫn xem được chi tiết phiếu.
+    <br/>Muốn <b>thanh toán</b> / <b>xem điểm</b> / <b>đổi quà</b> thì cần MetaMask.
   </p>
 
   <div class="card">
@@ -36,47 +50,43 @@
     <div><b>Thời điểm mua (unix):</b> <span id="time"></span></div>
     <div><b>Tranh chấp:</b> <span id="dispute"></span></div>
     <div><b>Chuyển nhượng:</b> <span id="transfer"></span></div>
-<hr style="margin:16px 0; border:none; border-top:1px solid #eee;" />
 
-<h3>Thanh toán</h3>
-<div><b>Còn lại cần trả:</b> <span id="remain">...</span></div>
+    <hr/>
 
-<button id="btnPay" style="margin-top:10px;padding:10px 14px;border-radius:10px;border:0;cursor:pointer;background:#2563eb;color:#fff;">
-  Thanh toán bằng MetaMask
-</button>
-<button id="btnOpenMM"
-  style="margin-top:10px;padding:10px 14px;border-radius:10px;border:0;cursor:pointer;background:#111827;color:#fff;">
-  Mở trang này trong MetaMask
-</button>
+    <h3>Thanh toán</h3>
+    <div><b>Còn lại cần trả:</b> <span id="remain">...</span></div>
 
-<script>
-  function openInMetaMask() {
-    const currentUrl = window.location.href;
-    // MetaMask dapp deeplink (mobile)
-    const mm = "https://metamask.app.link/dapp/" + currentUrl.replace(/^https?:\/\//, "");
-    window.location.href = mm;
-  }
-function openInMetaMask() {
-  const url = location.href;                   // url hiện tại đã có ?c=...&id=...
-  const noProto = url.replace(/^https?:\/\//, "");
-  const mmUrl = `https://metamask.app.link/dapp/${noProto}`;
-  location.href = mmUrl;
-}
+    <div class="row2">
+      <button id="btnPay" class="btn btnPrimary">Thanh toán bằng MetaMask</button>
+      <button id="btnOpenMM" class="btn btnDark">Mở trang này trong MetaMask</button>
+    </div>
 
-  document.getElementById("btnOpenMM").onclick = openInMetaMask;
+    <p id="payStatus" class="muted"></p>
+    <p id="payError" class="err"></p>
 
-  // Nếu không có MetaMask provider (Chrome/Safari mobile) thì gợi ý user bấm nút này
-  window.addEventListener("load", () => {
-    const hasProvider = typeof window.ethereum !== "undefined";
-    if (!hasProvider) {
-      // Optional: tự hiện thông báo
-      console.log("No ethereum provider. Suggest open in MetaMask.");
-    }
-  });
-</script>
+    <hr/>
 
-<p id="payStatus" class="muted"></p>
-<p id="payError" class="err"></p>
+    <h3>🎁 Điểm & Đổi quà</h3>
+    <div class="row2">
+      <span class="pill">Ví đang mở: <code id="mmAddr">chưa kết nối</code></span>
+      <button id="btnConnect" class="btn btnPrimary">Kết nối MetaMask</button>
+    </div>
+
+    <p class="muted" style="margin-top:8px;">
+      Điểm & quà được tính theo <b>ví đang mở trang</b> (MetaMask). Nếu bạn muốn tính theo “chủ sở hữu phiếu” thì phải mở bằng đúng ví đó.
+    </p>
+
+    <div><b>Điểm hiện tại:</b> <span id="points">...</span></div>
+
+    <div style="margin-top:10px;">
+      <b>Quà đổi được:</b>
+      <ul id="giftList" class="list"></ul>
+    </div>
+
+    <p id="giftStatus" class="muted"></p>
+    <p id="giftError" class="err"></p>
+
+    <hr/>
 
     <h4>Danh sách sản phẩm</h4>
     <table>
@@ -96,81 +106,188 @@ function openInMetaMask() {
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
 
   <script>
-    // ABI tối thiểu cho hàm đọc phiếu
-const ABI = [
-  "function ChiTietPhieuMuaPublic(uint256 _maPhieu) view returns (uint256 maPhieu, address chuSoHuu, address chuSoHuuCu, string tenKhachHang, string soDienThoai, string[] danhSachSanPham, uint256[] giaSanPham, uint256[] BaoHanhTheoThang, uint256 tongTien, uint256 thoiDiemMua, bool dangTranhChap, bool dangChuyenNhuong)",
-  "function soTienConLai(uint256 _maPhieu) view returns (uint256)",
-  "function payInvoice(uint256 _maPhieu) payable"
-];
+    // ABI tối thiểu cho web đọc phiếu + thanh toán + điểm/đổi quà
+    const ABI = [
+      "function ChiTietPhieuMuaPublic(uint256 _maPhieu) view returns (uint256 maPhieu, address chuSoHuu, address chuSoHuuCu, string tenKhachHang, string soDienThoai, string[] danhSachSanPham, uint256[] giaSanPham, uint256[] BaoHanhTheoThang, uint256 tongTien, uint256 thoiDiemMua, bool dangTranhChap, bool dangChuyenNhuong)",
+      "function soTienConLai(uint256 _maPhieu) view returns (uint256)",
+      "function payInvoice(uint256 _maPhieu) payable",
+      "function xemDiemTichLuy(address _khach) view returns (uint256)",
+      "function QuaCoTheDoi() view returns (string[] memory)",
+      "function doiQuaTheoSoDiemNhap(uint256 _soDiemMuonDoi) returns (string memory)"
+    ];
+
     const $ = (id) => document.getElementById(id);
     function setStatus(msg) { $("status").textContent = msg; }
     function setError(msg="") { $("error").textContent = msg; }
 
+    function setPayStatus(msg) { $("payStatus").textContent = msg; }
+    function setPayError(msg="") { $("payError").textContent = msg; }
+
+    function setGiftStatus(msg) { $("giftStatus").textContent = msg; }
+    function setGiftError(msg="") { $("giftError").textContent = msg; }
+
     function fmtVND(x) {
       try {
         const n = BigInt(x.toString());
-        // format thô
         return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " đ";
       } catch {
         return String(x);
       }
     }
-let mmProvider, signer;
 
-function setPayStatus(msg) { $("payStatus").textContent = msg; }
-function setPayError(msg="") { $("payError").textContent = msg; }
+    function fmtWeiToEth(weiBigInt) {
+      try { return ethers.formatEther(weiBigInt); } catch { return ""; }
+    }
 
-function fmtWeiToEth(weiBigInt) {
-  try { return ethers.formatEther(weiBigInt); } catch { return ""; }
-}
+    // Sepolia RPC fallback
+    const RPCS = [
+      "https://ethereum-sepolia-rpc.publicnode.com",
+      "https://sepolia.drpc.org",
+      "https://rpc.sepolia.org"
+    ];
 
-async function connectMetaMaskSepolia() {
-  if (!window.ethereum) throw new Error("Chưa có MetaMask.");
+    async function getWorkingProvider() {
+      for (const url of RPCS) {
+        try {
+          const p = new ethers.JsonRpcProvider(url);
+          await p.getBlockNumber();
+          return p;
+        } catch (e) {}
+      }
+      throw new Error("Không gọi được RPC Sepolia từ trình duyệt. Hãy thử mạng khác hoặc dùng RPC riêng (Alchemy/Infura).");
+    }
 
-  mmProvider = new ethers.BrowserProvider(window.ethereum);
-  await mmProvider.send("eth_requestAccounts", []);
-  signer = await mmProvider.getSigner();
+    // ===== MetaMask helpers =====
+    let mmProvider = null;
+    let signer = null;
 
-  // bắt buộc Sepolia (chainId = 11155111)
-  const net = await mmProvider.getNetwork();
-  if (Number(net.chainId) !== 11155111) {
-    throw new Error("Bạn đang không ở mạng Sepolia. Hãy chuyển MetaMask sang Sepolia rồi thử lại.");
-  }
-}
+    async function connectMetaMaskSepolia() {
+      if (!window.ethereum) throw new Error("Chưa có MetaMask (hoặc đang mở bằng trình duyệt không hỗ trợ extension/app).");
 
-async function loadRemain(contractRead, idNum) {
-  // đọc số tiền còn lại từ contract
-  const remain = await contractRead.soTienConLai(idNum);
-  $("remain").textContent =
-    `${fmtVND(remain)} (≈ ${fmtWeiToEth(remain)} ETH)`;
-  return remain;
-}
+      mmProvider = new ethers.BrowserProvider(window.ethereum);
+      await mmProvider.send("eth_requestAccounts", []);
+      signer = await mmProvider.getSigner();
 
-async function payNow(caddr, idNum, remainWei) {
-  setPayError("");
-  setPayStatus("Đang chuẩn bị thanh toán...");
+      const net = await mmProvider.getNetwork();
+      if (Number(net.chainId) !== 11155111) {
+        throw new Error("Bạn đang không ở mạng Sepolia. Hãy chuyển MetaMask sang Sepolia rồi thử lại.");
+      }
 
-  // Nếu đang ở Chrome (không có provider), tự nhảy sang MetaMask Browser
-  if (!window.ethereum) {
-    setPayStatus("Đang mở trong MetaMask...");
-    openInMetaMask();
-    return;
-  }
+      const a = await signer.getAddress();
+      $("mmAddr").textContent = a;
+      return a;
+    }
 
-  await connectMetaMaskSepolia();
+    function makeMetaMaskDeepLink(currentUrl) {
+      // MetaMask mobile: mở dapp trong MetaMask Browser
+      // dạng: https://metamask.app.link/dapp/<domain + path + query>
+      const clean = currentUrl.replace(/^https?:\/\//, "");
+      return "https://metamask.app.link/dapp/" + clean;
+    }
 
-  const contractWrite = new ethers.Contract(caddr, ABI, signer);
+    // ===== Payment =====
+    async function loadRemain(contractRead, idNum) {
+      const remain = await contractRead.soTienConLai(idNum);
+      $("remain").textContent = `${fmtVND(remain)} (≈ ${fmtWeiToEth(remain)} ETH)`;
+      return remain;
+    }
 
-  setPayStatus("Chờ bạn bấm Confirm trên MetaMask...");
-  const tx = await contractWrite.payInvoice(idNum, { value: remainWei });
+    async function payNow(caddr, idNum, remainWei) {
+      setPayError("");
+      setPayStatus("Đang kết nối MetaMask...");
 
-  setPayStatus("Đã gửi giao dịch. Đang chờ mining...");
-  await tx.wait();
+      await connectMetaMaskSepolia();
+      const contractWrite = new ethers.Contract(caddr, ABI, signer);
 
-  setPayStatus("Thanh toán thành công ✅");
-}
+      setPayStatus("Chờ bạn bấm Confirm trên MetaMask...");
+      const tx = await contractWrite.payInvoice(idNum, { value: remainWei });
 
+      setPayStatus("Đã gửi giao dịch. Đang chờ mining...");
+      await tx.wait();
 
+      setPayStatus("Thanh toán thành công ✅");
+    }
+
+    // ===== Gifts =====
+    function parsePointsFromGiftText(s) {
+      // ví dụ: "1 - Cáp sạc nhanh | Điểm cần: 150"
+      const m = String(s).match(/Điểm cần:\s*([0-9]+)/i);
+      if (!m) return null;
+      try { return BigInt(m[1]); } catch { return null; }
+    }
+
+    async function refreshGifts(caddr) {
+      setGiftError("");
+      setGiftStatus("");
+
+      // bắt buộc MetaMask để call vì contract check msg.sender
+      const addr = await connectMetaMaskSepolia();
+
+      const contractWrite = new ethers.Contract(caddr, ABI, signer);
+
+      setGiftStatus("Đang tải điểm & quà...");
+      const points = await contractWrite.xemDiemTichLuy(addr);
+      $("points").textContent = points.toString();
+
+      const listEl = $("giftList");
+      listEl.innerHTML = "";
+
+      let gifts = [];
+      try {
+        gifts = await contractWrite.QuaCoTheDoi();
+      } catch (e) {
+        // Nếu không có quà đổi được, hàm đang require(dem>0) -> revert
+        setGiftStatus("");
+        setGiftError("Hiện chưa có quà nào đổi được (chưa đủ điểm).");
+        return;
+      }
+
+      if (!gifts || gifts.length === 0) {
+        setGiftStatus("");
+        setGiftError("Hiện chưa có quà nào đổi được (chưa đủ điểm).");
+        return;
+      }
+
+      for (const g of gifts) {
+        const need = parsePointsFromGiftText(g);
+
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <div class="left">
+            <div class="title">${g}</div>
+            <div class="sub">Bấm “Đổi” để MetaMask xác nhận</div>
+          </div>
+          <button class="btn btnPrimary">Đổi</button>
+        `;
+        const btn = li.querySelector("button");
+
+        btn.onclick = async () => {
+          try {
+            setGiftError("");
+            setGiftStatus("Đang mở MetaMask để đổi quà...");
+
+            if (need === null) throw new Error("Không parse được số điểm cần từ dòng quà.");
+
+            const tx = await contractWrite.doiQuaTheoSoDiemNhap(need);
+            setGiftStatus("Đã gửi giao dịch. Đang chờ mining...");
+            const rc = await tx.wait();
+
+            setGiftStatus("Đổi quà thành công ✅ (đang refresh điểm...)");
+            await refreshGifts(caddr);
+          } catch (e) {
+            console.error(e);
+            setGiftError(e?.shortMessage || e?.message || String(e));
+            setGiftStatus("Đổi quà lỗi ❌");
+          }
+        };
+
+        listEl.appendChild(li);
+      }
+
+      setGiftStatus("Tải xong ✅");
+    }
+
+    // ===== Main =====
     async function main() {
       const params = new URLSearchParams(location.search);
       const caddr = params.get("c");
@@ -182,40 +299,14 @@ async function payNow(caddr, idNum, remainWei) {
       if (!caddr || !ethers.isAddress(caddr)) return setError("Thiếu hoặc sai contract address (tham số ?c=...).");
       if (!id || isNaN(Number(id))) return setError("Thiếu hoặc sai mã phiếu (tham số ?id=...).");
 
-      // Sepolia RPC public (có thể đổi nếu muốn)
-      // ✅ RPC fallback (cái nào chạy được thì dùng)
-const RPCS = [
-  "https://ethereum-sepolia-rpc.publicnode.com",
-  "https://sepolia.drpc.org",
-  "https://rpc.sepolia.org"
-];
-
-async function getWorkingProvider() {
-  for (const url of RPCS) {
-    try {
-      const p = new ethers.JsonRpcProvider(url);
-      await p.getBlockNumber(); // test kết nối
-      console.log("Using RPC:", url);
-      return p;
-    } catch (e) {
-      console.warn("RPC failed:", url, e);
-    }
-  }
-  throw new Error("Không gọi được RPC Sepolia từ trình duyệt. Hãy đổi mạng hoặc dùng RPC riêng (Alchemy/Infura).");
-}
-
-setStatus("Đang kết nối RPC Sepolia...");
-const provider = await getWorkingProvider();
-
-      const contract = new ethers.Contract(caddr, ABI, provider);
-const idNum = BigInt(id); // dùng BigInt cho chắc
+      setStatus("Đang kết nối RPC Sepolia...");
+      const provider = await getWorkingProvider();
+      const contractRead = new ethers.Contract(caddr, ABI, provider);
+      const idNum = BigInt(id);
 
       setStatus("Đang tải dữ liệu phiếu từ blockchain...");
-      const r = await contract.ChiTietPhieuMuaPublic(idNum);
+      const r = await contractRead.ChiTietPhieuMuaPublic(idNum);
 
-
-
-      // r là tuple theo ABI
       $("content").style.display = "block";
 
       $("owner").textContent = r.chuSoHuu;
@@ -226,9 +317,9 @@ const idNum = BigInt(id); // dùng BigInt cho chắc
       $("dispute").textContent = r.dangTranhChap ? "Có" : "Không";
       $("transfer").textContent = r.dangChuyenNhuong ? "Có" : "Không";
 
+      // Render products
       const rows = $("rows");
       rows.innerHTML = "";
-
       const names = r.danhSachSanPham;
       const prices = r.giaSanPham;
       const months = r.BaoHanhTheoThang;
@@ -243,53 +334,75 @@ const idNum = BigInt(id); // dùng BigInt cho chắc
         `;
         rows.appendChild(tr);
       }
-// ====== PAYMENT UI ======
-const btnPay = $("btnPay");
-btnPay.disabled = false;
-btnPay.style.opacity = "1";
-setPayError("");
-setPayStatus("");
 
-if (r.dangTranhChap) {
-  $("remain").textContent = "Phiếu đang tranh chấp — không cho thanh toán";
-  btnPay.disabled = true;
-  btnPay.style.opacity = "0.6";
-} else {
-  // load số tiền còn lại
-  let remainWei = await loadRemain(contract, idNum);
+      // MetaMask deep link button (mobile-friendly)
+      $("btnOpenMM").onclick = () => {
+        const url = makeMetaMaskDeepLink(location.href);
+        window.location.href = url;
+      };
 
-  if (remainWei === 0n) {
-    setPayStatus("Phiếu đã thanh toán đủ ✅");
-    btnPay.disabled = true;
-    btnPay.style.opacity = "0.6";
-  } else {
-    btnPay.onclick = async () => {
-      try {
-        // đọc lại remain trước khi trả (tránh trường hợp người khác vừa trả)
-        remainWei = await loadRemain(contract, idNum);
+      // Payment UI
+      const btnPay = $("btnPay");
+      btnPay.disabled = false;
+
+      setPayError("");
+      setPayStatus("");
+
+      if (r.dangTranhChap) {
+        $("remain").textContent = "Phiếu đang tranh chấp — không cho thanh toán";
+        btnPay.disabled = true;
+      } else {
+        let remainWei = await loadRemain(contractRead, idNum);
+
         if (remainWei === 0n) {
           setPayStatus("Phiếu đã thanh toán đủ ✅");
           btnPay.disabled = true;
-          btnPay.style.opacity = "0.6";
-          return;
-        }
+        } else {
+          btnPay.onclick = async () => {
+            try {
+              // đọc lại remain trước khi trả
+              remainWei = await loadRemain(contractRead, idNum);
+              if (remainWei === 0n) {
+                setPayStatus("Phiếu đã thanh toán đủ ✅");
+                btnPay.disabled = true;
+                return;
+              }
 
-        await payNow(caddr, idNum, remainWei);
+              await payNow(caddr, idNum, remainWei);
 
-        // refresh remain sau khi trả
-        remainWei = await loadRemain(contract, idNum);
-        if (remainWei === 0n) {
-          btnPay.disabled = true;
-          btnPay.style.opacity = "0.6";
+              // refresh remain sau khi trả
+              remainWei = await loadRemain(contractRead, idNum);
+              if (remainWei === 0n) btnPay.disabled = true;
+
+            } catch (e) {
+              console.error(e);
+              setPayError(e?.shortMessage || e?.message || String(e));
+              setPayStatus("Thanh toán lỗi ❌");
+            }
+          };
         }
-      } catch (e) {
-        console.error(e);
-        setPayError(e?.shortMessage || e?.message || String(e));
-        setPayStatus("Thanh toán lỗi ❌");
       }
-    };
-  }
-}
+
+      // Gifts UI
+      $("btnConnect").onclick = async () => {
+        try {
+          setGiftError("");
+          setGiftStatus("Đang kết nối MetaMask...");
+          await refreshGifts(caddr);
+        } catch (e) {
+          console.error(e);
+          setGiftError(e?.shortMessage || e?.message || String(e));
+          setGiftStatus("Không kết nối được MetaMask ❌");
+        }
+      };
+
+      // auto-hint nếu có MetaMask
+      if (window.ethereum) {
+        $("points").textContent = "(bấm Kết nối MetaMask để xem)";
+      } else {
+        $("points").textContent = "(cần MetaMask)";
+        setGiftError("Bạn đang mở bằng trình duyệt không có MetaMask. Nếu dùng điện thoại: mở link bằng MetaMask Browser.");
+      }
 
       setStatus("Tải xong ✅");
     }
@@ -302,8 +415,3 @@ if (r.dangTranhChap) {
   </script>
 </body>
 </html>
-
-
-
-
-
