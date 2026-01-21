@@ -45,21 +45,9 @@
 
     <div class="card">
       <h3>2) Nhập dữ liệu phiếu</h3>
-
-      <label>Địa chỉ khách (address)</label>
-      <input id="khach" placeholder="0x..." />
-
-      <label>Tên khách</label>
-      <input id="tenKhach" placeholder="Nguyễn Văn A" />
-
-      <label>Số điện thoại</label>
-      <input id="sdt" placeholder="09xxxxxxxx" />
-
-      <label>Danh sách số thứ tự SP (cách nhau bằng dấu phẩy)</label>
-      <input id="spIndex" placeholder="Ví dụ: 1,2,4" />
-
-      <button class="primary" id="btnCreate">Tạo phiếu & tạo QR</button>
-
+<label>Số phiếu</label>
+<input id="receiptId" placeholder="Ví dụ: 1" />
+ <button class="primary" id="btnCreate">Tạo QR</button>
       <p id="status" class="muted"></p>
       <p id="error" class="err"></p>
     </div>
@@ -82,13 +70,6 @@
 
   <script>
     // ABI tối thiểu chỉ cần các hàm bạn dùng
-  const ABI = [
-  "function taoPhieuMuaTheoSoThuTu(address _khach, string _tenKhach, string _soDT, uint256[] _indexSP) public",
-  "function demPhieu() view returns (uint256)",
-  "function cuaHangAdmin() view returns (address)"
-];
-
-
     let provider, signer;
 
     const $ = (id) => document.getElementById(id);
@@ -114,6 +95,29 @@
       setError("");
       setStatus("Đã kết nối MetaMask ✔");
     }
+function createQRFromReceiptId() {
+  setError("");
+
+  const contractAddr = $("contractAddr").value.trim();
+  const receiptBase  = $("receiptBase").value.trim();
+  const receiptIdRaw = $("receiptId").value.trim();
+
+  if (!ethers.isAddress(contractAddr)) return setError("Contract Address không hợp lệ.");
+  if (!receiptBase.startsWith("http")) return setError("Receipt Page URL phải là link đầy đủ (https://...).");
+
+  const n = Number(receiptIdRaw);
+  if (!Number.isInteger(n) || n <= 0) return setError("Số phiếu phải là số nguyên dương (vd: 1).");
+
+  // tạo link QR trỏ thẳng tới phiếu đã có sẵn
+  const url = `${receiptBase}?c=${contractAddr}&id=${n}`;
+  $("qrLink").value = url;
+
+  // render QR
+  $("qrcode").innerHTML = "";
+  new QRCode($("qrcode"), { text: url, width: 220, height: 220 });
+
+  setStatus(`Đã tạo QR cho phiếu #${n} ✅`);
+}
 
     function parseIndexList(text) {
       const arr = text.split(",").map(s => s.trim()).filter(Boolean);
@@ -125,58 +129,21 @@
       });
       return nums;
     }
-
-    async function createReceiptAndQR() {
-      setError("");
-      if (!signer) return setError("Bạn chưa kết nối MetaMask.");
-      const contractAddr = $("contractAddr").value.trim();
-      const receiptBase = $("receiptBase").value.trim();
-      if (!ethers.isAddress(contractAddr)) return setError("Contract Address không hợp lệ.");
-      if (!receiptBase.startsWith("http")) return setError("Receipt Page URL phải là link đầy đủ (https://...).");
-
-      const khach = $("khach").value.trim();
-      if (!ethers.isAddress(khach)) return setError("Địa chỉ khách không hợp lệ.");
-
-      const tenKhach = $("tenKhach").value.trim();
-      const sdt = $("sdt").value.trim();
-      const indexSP = parseIndexList($("spIndex").value);
-
-      const c = new ethers.Contract(contractAddr, ABI, signer);
-
-      setStatus("Đang gửi giao dịch tạo phiếu... (chờ MetaMask xác nhận)");
-      const tx = await c.taoPhieuMuaTheoSoThuTu(khach, tenKhach, sdt, indexSP);
-      setStatus("Đã gửi tx. Đang chờ mining trên Sepolia...");
-
-      await tx.wait();
-
-      // Lấy mã phiếu mới nhất: demPhieu()
-      const id = await c.demPhieu();
-
-      // Tạo link cho QR
-      // receipt.html?c=<contract>&id=<maPhieu>
-      const url = `${receiptBase}?c=${contractAddr}&id=${id.toString()}`;
-      $("qrLink").value = url;
-
-      // Render QR
-      $("qrcode").innerHTML = "";
-      new QRCode($("qrcode"), {
-        text: url,
-        width: 220,
-        height: 220
-      });
-
-      setStatus(`Tạo phiếu thành công! Mã phiếu: ${id.toString()} ✅`);
-    }
-
     $("btnConnect").addEventListener("click", connect);
-    $("btnCreate").addEventListener("click", () => createReceiptAndQR().catch(e => {
-      console.error(e);
-      setError(e?.shortMessage || e?.message || String(e));
-      setStatus("Có lỗi khi tạo phiếu ❌", false);
-    }));
+   $("btnCreate").addEventListener("click", () => {
+  try {
+    createQRFromReceiptId();
+  } catch (e) {
+    console.error(e);
+    setError(e?.message || String(e));
+    setStatus("Có lỗi khi tạo QR ❌", false);
+  }
+});
+
   </script>
 </body>
 </html>
+
 
 
 
