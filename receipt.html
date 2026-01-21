@@ -86,8 +86,29 @@
       if (!id || isNaN(Number(id))) return setError("Thiếu hoặc sai mã phiếu (tham số ?id=...).");
 
       // Sepolia RPC public (có thể đổi nếu muốn)
-      const RPC = "https://rpc.sepolia.org";
-      const provider = new ethers.JsonRpcProvider(RPC);
+      // ✅ RPC fallback (cái nào chạy được thì dùng)
+const RPCS = [
+  "https://ethereum-sepolia-rpc.publicnode.com",
+  "https://sepolia.drpc.org",
+  "https://rpc.sepolia.org"
+];
+
+async function getWorkingProvider() {
+  for (const url of RPCS) {
+    try {
+      const p = new ethers.JsonRpcProvider(url);
+      await p.getBlockNumber(); // test kết nối
+      console.log("Using RPC:", url);
+      return p;
+    } catch (e) {
+      console.warn("RPC failed:", url, e);
+    }
+  }
+  throw new Error("Không gọi được RPC Sepolia từ trình duyệt. Hãy đổi mạng hoặc dùng RPC riêng (Alchemy/Infura).");
+}
+
+setStatus("Đang kết nối RPC Sepolia...");
+const provider = await getWorkingProvider();
 
       const contract = new ethers.Contract(caddr, ABI, provider);
 
