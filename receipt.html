@@ -1,1 +1,138 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Phiếu mua sắm</title>
+  <style>
+    body { font-family: system-ui, Arial; max-width: 980px; margin: 24px auto; padding: 0 12px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-top: 12px; }
+    .muted { color:#666; }
+    .err { color:#b00020; white-space: pre-wrap; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+    code { background:#f6f6f6; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h2>Phiếu mua sắm</h2>
+  <p class="muted">
+    Trang này đọc dữ liệu từ blockchain (Sepolia). Nếu bạn mở bằng điện thoại, không cần MetaMask vẫn xem được.
+  </p>
+
+  <div class="card">
+    <div><b>Contract:</b> <code id="caddr"></code></div>
+    <div><b>Mã phiếu:</b> <code id="pid"></code></div>
+    <p id="status" class="muted"></p>
+    <p id="error" class="err"></p>
+  </div>
+
+  <div id="content" class="card" style="display:none;">
+    <h3>Chi tiết phiếu</h3>
+    <div><b>Chủ sở hữu:</b> <code id="owner"></code></div>
+    <div><b>Tên khách:</b> <span id="name"></span></div>
+    <div><b>SĐT:</b> <span id="phone"></span></div>
+    <div><b>Tổng tiền:</b> <span id="total"></span></div>
+    <div><b>Thời điểm mua (unix):</b> <span id="time"></span></div>
+    <div><b>Tranh chấp:</b> <span id="dispute"></span></div>
+    <div><b>Chuyển nhượng:</b> <span id="transfer"></span></div>
+
+    <h4>Danh sách sản phẩm</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Tên SP</th>
+          <th>Giá</th>
+          <th>Bảo hành (tháng)</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <!-- ethers v6 -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+
+  <script>
+    // ABI tối thiểu cho hàm đọc phiếu
+    const ABI = [
+      "function ChiTietPhieuMua(uint256 _maPhieu) view returns (uint256 maPhieu, address chuSoHuu, address chuSoHuuCu, string tenKhachHang, string soDienThoai, string[] danhSachSanPham, uint256[] giaSanPham, uint256[] BaoHanhTheoThang, uint256 tongTien, uint256 thoiDiemMua, bool dangTranhChap, bool dangChuyenNhuong)"
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    function setStatus(msg) { $("status").textContent = msg; }
+    function setError(msg="") { $("error").textContent = msg; }
+
+    function fmtVND(x) {
+      try {
+        const n = BigInt(x.toString());
+        // format thô
+        return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " đ";
+      } catch {
+        return String(x);
+      }
+    }
+
+    async function main() {
+      const params = new URLSearchParams(location.search);
+      const caddr = params.get("c");
+      const id = params.get("id");
+
+      $("caddr").textContent = caddr || "";
+      $("pid").textContent = id || "";
+
+      if (!caddr || !ethers.isAddress(caddr)) return setError("Thiếu hoặc sai contract address (tham số ?c=...).");
+      if (!id || isNaN(Number(id))) return setError("Thiếu hoặc sai mã phiếu (tham số ?id=...).");
+
+      // Sepolia RPC public (có thể đổi nếu muốn)
+      const RPC = "https://rpc.sepolia.org";
+      const provider = new ethers.JsonRpcProvider(RPC);
+
+      const contract = new ethers.Contract(caddr, ABI, provider);
+
+      setStatus("Đang tải dữ liệu phiếu từ blockchain...");
+      const r = await contract.ChiTietPhieuMua(id);
+
+      // r là tuple theo ABI
+      $("content").style.display = "block";
+
+      $("owner").textContent = r.chuSoHuu;
+      $("name").textContent = r.tenKhachHang;
+      $("phone").textContent = r.soDienThoai;
+      $("total").textContent = fmtVND(r.tongTien);
+      $("time").textContent = r.thoiDiemMua.toString();
+      $("dispute").textContent = r.dangTranhChap ? "Có" : "Không";
+      $("transfer").textContent = r.dangChuyenNhuong ? "Có" : "Không";
+
+      const rows = $("rows");
+      rows.innerHTML = "";
+
+      const names = r.danhSachSanPham;
+      const prices = r.giaSanPham;
+      const months = r.BaoHanhTheoThang;
+
+      for (let i = 0; i < names.length; i++) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${i+1}</td>
+          <td>${names[i]}</td>
+          <td>${fmtVND(prices[i])}</td>
+          <td>${months[i].toString()}</td>
+        `;
+        rows.appendChild(tr);
+      }
+
+      setStatus("Tải xong ✅");
+    }
+
+    main().catch(e => {
+      console.error(e);
+      setError(e?.shortMessage || e?.message || String(e));
+      setStatus("Có lỗi khi tải phiếu ❌");
+    });
+  </script>
+</body>
+</html>
+
 
