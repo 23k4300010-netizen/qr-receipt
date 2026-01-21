@@ -36,6 +36,17 @@
     <div><b>Thời điểm mua (unix):</b> <span id="time"></span></div>
     <div><b>Tranh chấp:</b> <span id="dispute"></span></div>
     <div><b>Chuyển nhượng:</b> <span id="transfer"></span></div>
+<hr style="margin:16px 0; border:none; border-top:1px solid #eee;" />
+
+<h3>Thanh toán</h3>
+<div><b>Còn lại cần trả:</b> <span id="remain">...</span></div>
+
+<button id="btnPay" style="margin-top:10px;padding:10px 14px;border-radius:10px;border:0;cursor:pointer;background:#2563eb;color:#fff;">
+  Thanh toán bằng MetaMask
+</button>
+
+<p id="payStatus" class="muted"></p>
+<p id="payError" class="err"></p>
 
     <h4>Danh sách sản phẩm</h4>
     <table>
@@ -56,11 +67,11 @@
 
   <script>
     // ABI tối thiểu cho hàm đọc phiếu
-  const ABI = [
-  "function ChiTietPhieuMuaPublic(uint256 _maPhieu) view returns (uint256 maPhieu, address chuSoHuu, address chuSoHuuCu, string tenKhachHang, string soDienThoai, string[] danhSachSanPham, uint256[] giaSanPham, uint256[] BaoHanhTheoThang, uint256 tongTien, uint256 thoiDiemMua, bool dangTranhChap, bool dangChuyenNhuong)"
+const ABI = [
+  "function ChiTietPhieuMuaPublic(uint256 _maPhieu) view returns (uint256 maPhieu, address chuSoHuu, address chuSoHuuCu, string tenKhachHang, string soDienThoai, string[] danhSachSanPham, uint256[] giaSanPham, uint256[] BaoHanhTheoThang, uint256 tongTien, uint256 thoiDiemMua, bool dangTranhChap, bool dangChuyenNhuong)",
+  "function soTienConLai(uint256 _maPhieu) view returns (uint256)",
+  "function payInvoice(uint256 _maPhieu) payable"
 ];
-;
-
     const $ = (id) => document.getElementById(id);
     function setStatus(msg) { $("status").textContent = msg; }
     function setError(msg="") { $("error").textContent = msg; }
@@ -74,6 +85,53 @@
         return String(x);
       }
     }
+let mmProvider, signer;
+
+function setPayStatus(msg) { $("payStatus").textContent = msg; }
+function setPayError(msg="") { $("payError").textContent = msg; }
+
+function fmtWeiToEth(weiBigInt) {
+  try { return ethers.formatEther(weiBigInt); } catch { return ""; }
+}
+
+async function connectMetaMaskSepolia() {
+  if (!window.ethereum) throw new Error("Chưa có MetaMask.");
+
+  mmProvider = new ethers.BrowserProvider(window.ethereum);
+  await mmProvider.send("eth_requestAccounts", []);
+  signer = await mmProvider.getSigner();
+
+  // bắt buộc Sepolia (chainId = 11155111)
+  const net = await mmProvider.getNetwork();
+  if (Number(net.chainId) !== 11155111) {
+    throw new Error("Bạn đang không ở mạng Sepolia. Hãy chuyển MetaMask sang Sepolia rồi thử lại.");
+  }
+}
+
+async function loadRemain(contractRead, idNum) {
+  // đọc số tiền còn lại từ contract
+  const remain = await contractRead.soTienConLai(idNum);
+  $("remain").textContent =
+    `${fmtVND(remain)} (≈ ${fmtWeiToEth(remain)} ETH)`;
+  return remain;
+}
+
+async function payNow(caddr, idNum, remainWei) {
+  setPayError("");
+  setPayStatus("Đang mở MetaMask để thanh toán...");
+
+  await connectMetaMaskSepolia();
+
+  const contractWrite = new ethers.Contract(caddr, ABI, signer);
+
+  setPayStatus("Chờ bạn bấm Confirm trên MetaMask...");
+  const tx = await contractWrite.payInvoice(idNum, { value: remainWei });
+
+  setPayStatus("Đã gửi giao dịch. Đang chờ mining...");
+  await tx.wait();
+
+  setPayStatus("Thanh toán thành công ✅");
+}
 
     async function main() {
       const params = new URLSearchParams(location.search);
@@ -112,9 +170,11 @@ setStatus("Đang kết nối RPC Sepolia...");
 const provider = await getWorkingProvider();
 
       const contract = new ethers.Contract(caddr, ABI, provider);
+const idNum = BigInt(id); // dùng BigInt cho chắc
 
       setStatus("Đang tải dữ liệu phiếu từ blockchain...");
-      const r = await contract.ChiTietPhieuMuaPublic(id);
+      const r = await contract.ChiTietPhieuMuaPublic(idNum);
+
 
 
       // r là tuple theo ABI
@@ -145,6 +205,53 @@ const provider = await getWorkingProvider();
         `;
         rows.appendChild(tr);
       }
+// ====== PAYMENT UI ======
+const btnPay = $("btnPay");
+btnPay.disabled = false;
+btnPay.style.opacity = "1";
+setPayError("");
+setPayStatus("");
+
+if (r.dangTranhChap) {
+  $("remain").textContent = "Phiếu đang tranh chấp — không cho thanh toán";
+  btnPay.disabled = true;
+  btnPay.style.opacity = "0.6";
+} else {
+  // load số tiền còn lại
+  let remainWei = await loadRemain(contract, idNum);
+
+  if (remainWei === 0n) {
+    setPayStatus("Phiếu đã thanh toán đủ ✅");
+    btnPay.disabled = true;
+    btnPay.style.opacity = "0.6";
+  } else {
+    btnPay.onclick = async () => {
+      try {
+        // đọc lại remain trước khi trả (tránh trường hợp người khác vừa trả)
+        remainWei = await loadRemain(contract, idNum);
+        if (remainWei === 0n) {
+          setPayStatus("Phiếu đã thanh toán đủ ✅");
+          btnPay.disabled = true;
+          btnPay.style.opacity = "0.6";
+          return;
+        }
+
+        await payNow(caddr, idNum, remainWei);
+
+        // refresh remain sau khi trả
+        remainWei = await loadRemain(contract, idNum);
+        if (remainWei === 0n) {
+          btnPay.disabled = true;
+          btnPay.style.opacity = "0.6";
+        }
+      } catch (e) {
+        console.error(e);
+        setPayError(e?.shortMessage || e?.message || String(e));
+        setPayStatus("Thanh toán lỗi ❌");
+      }
+    };
+  }
+}
 
       setStatus("Tải xong ✅");
     }
@@ -157,6 +264,7 @@ const provider = await getWorkingProvider();
   </script>
 </body>
 </html>
+
 
 
 
