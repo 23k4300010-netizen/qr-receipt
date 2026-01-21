@@ -1,1 +1,178 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin - Tạo phiếu & QR</title>
+  <style>
+    body { font-family: system-ui, Arial; max-width: 980px; margin: 24px auto; padding: 0 12px; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; flex: 1; min-width: 320px; }
+    label { display:block; margin: 10px 0 6px; font-weight: 600; }
+    input, textarea { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ccc; }
+    button { padding: 10px 14px; border-radius: 10px; border: 0; cursor: pointer; }
+    button.primary { background: #2563eb; color: white; }
+    .muted { color:#666; font-size: 14px; }
+    .ok { color: #0a7a2f; }
+    .err { color: #b00020; white-space: pre-wrap; }
+    #qrcode { margin-top: 12px; }
+    code { background:#f6f6f6; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h2>Admin tạo phiếu mua → tự hiện QR</h2>
+  <p class="muted">
+    Web này tạo phiếu trên Sepolia bằng MetaMask. Xong sẽ tạo QR dẫn đến <code>receipt.html</code> để khách quét.
+  </p>
+
+  <div class="row">
+    <div class="card">
+      <h3>1) Kết nối & cấu hình</h3>
+      <button class="primary" id="btnConnect">Kết nối MetaMask</button>
+      <p class="muted">Ví hiện tại: <span id="addr">Chưa kết nối</span></p>
+
+      <label>Contract Address (Sepolia)</label>
+      <input id="contractAddr" placeholder="0x..." />
+
+      <label>Receipt Page URL (đường dẫn receipt.html)</label>
+      <input id="receiptBase" placeholder="Ví dụ: https://YOURNAME.github.io/qr-receipt/receipt.html" />
+
+      <p class="muted">
+        Tip: Nếu bạn host trên GitHub Pages thì receipt url sẽ dạng: <code>https://username.github.io/repo/receipt.html</code>
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>2) Nhập dữ liệu phiếu</h3>
+
+      <label>Địa chỉ khách (address)</label>
+      <input id="khach" placeholder="0x..." />
+
+      <label>Tên khách</label>
+      <input id="tenKhach" placeholder="Nguyễn Văn A" />
+
+      <label>Số điện thoại</label>
+      <input id="sdt" placeholder="09xxxxxxxx" />
+
+      <label>Danh sách số thứ tự SP (cách nhau bằng dấu phẩy)</label>
+      <input id="spIndex" placeholder="Ví dụ: 1,2,4" />
+
+      <button class="primary" id="btnCreate">Tạo phiếu & tạo QR</button>
+
+      <p id="status" class="muted"></p>
+      <p id="error" class="err"></p>
+    </div>
+
+    <div class="card">
+      <h3>3) QR cho khách quét</h3>
+      <div class="muted">Link QR:</div>
+      <textarea id="qrLink" rows="3" readonly></textarea>
+      <div id="qrcode"></div>
+      <p class="muted">
+        Khách quét QR → mở receipt.html → web đọc blockchain và hiển thị phiếu.
+      </p>
+    </div>
+  </div>
+
+  <!-- ethers v6 -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+  <!-- QRCode.js -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+  <script>
+    // ABI tối thiểu chỉ cần các hàm bạn dùng
+    const ABI = [
+      "function taoPhieuMuaTheoSoThuTu(address _khach, string _tenKhach, string _soDT, uint256[] _indexSP) external",
+      "function demPhieu() view returns (uint256)"
+    ];
+
+    let provider, signer;
+
+    const $ = (id) => document.getElementById(id);
+
+    function setStatus(msg, ok=true) {
+      $("status").textContent = msg;
+      $("status").className = ok ? "muted ok" : "muted";
+    }
+    function setError(msg="") {
+      $("error").textContent = msg;
+    }
+
+    async function connect() {
+      if (!window.ethereum) {
+        setError("Chưa có MetaMask. Cài MetaMask rồi thử lại.");
+        return;
+      }
+      provider = new ethers.BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      signer = await provider.getSigner();
+      const addr = await signer.getAddress();
+      $("addr").textContent = addr;
+      setError("");
+      setStatus("Đã kết nối MetaMask ✔");
+    }
+
+    function parseIndexList(text) {
+      const arr = text.split(",").map(s => s.trim()).filter(Boolean);
+      if (arr.length === 0) throw new Error("Chưa nhập danh sách SP");
+      const nums = arr.map(x => {
+        const n = Number(x);
+        if (!Number.isInteger(n) || n <= 0) throw new Error("Danh sách SP phải là số nguyên dương, vd: 1,2,4");
+        return n;
+      });
+      return nums;
+    }
+
+    async function createReceiptAndQR() {
+      setError("");
+      if (!signer) return setError("Bạn chưa kết nối MetaMask.");
+      const contractAddr = $("contractAddr").value.trim();
+      const receiptBase = $("receiptBase").value.trim();
+      if (!ethers.isAddress(contractAddr)) return setError("Contract Address không hợp lệ.");
+      if (!receiptBase.startsWith("http")) return setError("Receipt Page URL phải là link đầy đủ (https://...).");
+
+      const khach = $("khach").value.trim();
+      if (!ethers.isAddress(khach)) return setError("Địa chỉ khách không hợp lệ.");
+
+      const tenKhach = $("tenKhach").value.trim();
+      const sdt = $("sdt").value.trim();
+      const indexSP = parseIndexList($("spIndex").value);
+
+      const c = new ethers.Contract(contractAddr, ABI, signer);
+
+      setStatus("Đang gửi giao dịch tạo phiếu... (chờ MetaMask xác nhận)");
+      const tx = await c.taoPhieuMuaTheoSoThuTu(khach, tenKhach, sdt, indexSP);
+      setStatus("Đã gửi tx. Đang chờ mining trên Sepolia...");
+
+      await tx.wait();
+
+      // Lấy mã phiếu mới nhất: demPhieu()
+      const id = await c.demPhieu();
+
+      // Tạo link cho QR
+      // receipt.html?c=<contract>&id=<maPhieu>
+      const url = `${receiptBase}?c=${contractAddr}&id=${id.toString()}`;
+      $("qrLink").value = url;
+
+      // Render QR
+      $("qrcode").innerHTML = "";
+      new QRCode($("qrcode"), {
+        text: url,
+        width: 220,
+        height: 220
+      });
+
+      setStatus(`Tạo phiếu thành công! Mã phiếu: ${id.toString()} ✅`);
+    }
+
+    $("btnConnect").addEventListener("click", connect);
+    $("btnCreate").addEventListener("click", () => createReceiptAndQR().catch(e => {
+      console.error(e);
+      setError(e?.shortMessage || e?.message || String(e));
+      setStatus("Có lỗi khi tạo phiếu ❌", false);
+    }));
+  </script>
+</body>
+</html>
+
 
