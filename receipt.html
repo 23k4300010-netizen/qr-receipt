@@ -12,6 +12,10 @@
     table { width:100%; border-collapse: collapse; }
     th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
     code { background:#f6f6f6; padding: 2px 6px; border-radius: 6px; }
+    .btn { margin-top:10px;padding:10px 14px;border-radius:10px;border:0;cursor:pointer; }
+    .btnPrimary { background:#2563eb;color:#fff; }
+    .btnDark { background:#111827;color:#fff; }
+    .btnDisabled { opacity:0.6; cursor:not-allowed; }
   </style>
 </head>
 <body>
@@ -36,41 +40,17 @@
     <div><b>Thời điểm mua (unix):</b> <span id="time"></span></div>
     <div><b>Tranh chấp:</b> <span id="dispute"></span></div>
     <div><b>Chuyển nhượng:</b> <span id="transfer"></span></div>
-<hr style="margin:16px 0; border:none; border-top:1px solid #eee;" />
 
-<h3>Thanh toán</h3>
-<div><b>Còn lại cần trả:</b> <span id="remain">...</span></div>
+    <hr style="margin:16px 0; border:none; border-top:1px solid #eee;" />
 
-<button id="btnPay" style="margin-top:10px;padding:10px 14px;border-radius:10px;border:0;cursor:pointer;background:#2563eb;color:#fff;">
-  Thanh toán bằng MetaMask
-</button>
-<button id="btnOpenMM"
-  style="margin-top:10px;padding:10px 14px;border-radius:10px;border:0;cursor:pointer;background:#111827;color:#fff;">
-  Mở trang này trong MetaMask
-</button>
+    <h3>Thanh toán</h3>
+    <div><b>Còn lại cần trả:</b> <span id="remain">...</span></div>
 
-<script>
-  function openInMetaMask() {
-    const currentUrl = window.location.href;
-    // MetaMask dapp deeplink (mobile)
-    const mm = "https://metamask.app.link/dapp/" + currentUrl.replace(/^https?:\/\//, "");
-    window.location.href = mm;
-  }
+    <button id="btnPay" class="btn btnPrimary">Thanh toán bằng MetaMask</button>
+    <button id="btnOpenMM" class="btn btnDark" style="display:none;">Mở trang này trong MetaMask</button>
 
-  document.getElementById("btnOpenMM").onclick = openInMetaMask;
-
-  // Nếu không có MetaMask provider (Chrome/Safari mobile) thì gợi ý user bấm nút này
-  window.addEventListener("load", () => {
-    const hasProvider = typeof window.ethereum !== "undefined";
-    if (!hasProvider) {
-      // Optional: tự hiện thông báo
-      console.log("No ethereum provider. Suggest open in MetaMask.");
-    }
-  });
-</script>
-
-<p id="payStatus" class="muted"></p>
-<p id="payError" class="err"></p>
+    <p id="payStatus" class="muted"></p>
+    <p id="payError" class="err"></p>
 
     <h4>Danh sách sản phẩm</h4>
     <table>
@@ -90,72 +70,94 @@
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
 
   <script>
-    // ABI tối thiểu cho hàm đọc phiếu
-const ABI = [
-  "function ChiTietPhieuMuaPublic(uint256 _maPhieu) view returns (uint256 maPhieu, address chuSoHuu, address chuSoHuuCu, string tenKhachHang, string soDienThoai, string[] danhSachSanPham, uint256[] giaSanPham, uint256[] BaoHanhTheoThang, uint256 tongTien, uint256 thoiDiemMua, bool dangTranhChap, bool dangChuyenNhuong)",
-  "function soTienConLai(uint256 _maPhieu) view returns (uint256)",
-  "function payInvoice(uint256 _maPhieu) payable"
-];
+    const ABI = [
+      "function ChiTietPhieuMuaPublic(uint256 _maPhieu) view returns (uint256 maPhieu, address chuSoHuu, address chuSoHuuCu, string tenKhachHang, string soDienThoai, string[] danhSachSanPham, uint256[] giaSanPham, uint256[] BaoHanhTheoThang, uint256 tongTien, uint256 thoiDiemMua, bool dangTranhChap, bool dangChuyenNhuong)",
+      "function soTienConLai(uint256 _maPhieu) view returns (uint256)",
+      "function payInvoice(uint256 _maPhieu) payable"
+    ];
+
     const $ = (id) => document.getElementById(id);
     function setStatus(msg) { $("status").textContent = msg; }
     function setError(msg="") { $("error").textContent = msg; }
 
+    function setPayStatus(msg) { $("payStatus").textContent = msg; }
+    function setPayError(msg="") { $("payError").textContent = msg; }
+
     function fmtVND(x) {
       try {
         const n = BigInt(x.toString());
-        // format thô
         return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " đ";
-      } catch {
-        return String(x);
+      } catch { return String(x); }
+    }
+    function fmtWeiToEth(weiBigInt) {
+      try { return ethers.formatEther(weiBigInt); } catch { return ""; }
+    }
+
+    // ===== MetaMask deep link =====
+    function openInMetaMask() {
+      const currentUrl = window.location.href;
+      const deep = "https://metamask.app.link/dapp/" + currentUrl.replace(/^https?:\/\//, "");
+      window.location.href = deep;
+    }
+
+    // ===== connect & pay =====
+    let mmProvider, signer;
+
+    async function connectMetaMaskSepolia() {
+      if (!window.ethereum) throw new Error("Chưa có MetaMask (hãy mở link trong MetaMask Browser).");
+
+      mmProvider = new ethers.BrowserProvider(window.ethereum);
+      await mmProvider.send("eth_requestAccounts", []);
+      signer = await mmProvider.getSigner();
+
+      const net = await mmProvider.getNetwork();
+      if (Number(net.chainId) !== 11155111) {
+        throw new Error("Bạn đang không ở mạng Sepolia. Hãy chuyển MetaMask sang Sepolia rồi thử lại.");
       }
     }
-let mmProvider, signer;
 
-function setPayStatus(msg) { $("payStatus").textContent = msg; }
-function setPayError(msg="") { $("payError").textContent = msg; }
+    async function loadRemain(contractRead, idNum) {
+      const remain = await contractRead.soTienConLai(idNum);
+      $("remain").textContent = `${fmtVND(remain)} (≈ ${fmtWeiToEth(remain)} ETH)`;
+      return remain;
+    }
 
-function fmtWeiToEth(weiBigInt) {
-  try { return ethers.formatEther(weiBigInt); } catch { return ""; }
-}
+    async function payNow(caddr, idNum, remainWei) {
+      setPayError("");
+      setPayStatus("Đang mở MetaMask để thanh toán...");
 
-async function connectMetaMaskSepolia() {
-  if (!window.ethereum) throw new Error("Chưa có MetaMask.");
+      await connectMetaMaskSepolia();
+      const contractWrite = new ethers.Contract(caddr, ABI, signer);
 
-  mmProvider = new ethers.BrowserProvider(window.ethereum);
-  await mmProvider.send("eth_requestAccounts", []);
-  signer = await mmProvider.getSigner();
+      setPayStatus("Chờ bạn bấm Confirm trên MetaMask...");
+      const tx = await contractWrite.payInvoice(idNum, { value: remainWei });
 
-  // bắt buộc Sepolia (chainId = 11155111)
-  const net = await mmProvider.getNetwork();
-  if (Number(net.chainId) !== 11155111) {
-    throw new Error("Bạn đang không ở mạng Sepolia. Hãy chuyển MetaMask sang Sepolia rồi thử lại.");
-  }
-}
+      setPayStatus("Đã gửi giao dịch. Đang chờ mining...");
+      await tx.wait();
 
-async function loadRemain(contractRead, idNum) {
-  // đọc số tiền còn lại từ contract
-  const remain = await contractRead.soTienConLai(idNum);
-  $("remain").textContent =
-    `${fmtVND(remain)} (≈ ${fmtWeiToEth(remain)} ETH)`;
-  return remain;
-}
+      setPayStatus("Thanh toán thành công ✅");
+    }
 
-async function payNow(caddr, idNum, remainWei) {
-  setPayError("");
-  setPayStatus("Đang mở MetaMask để thanh toán...");
+    // ===== RPC read provider =====
+    const RPCS = [
+      "https://ethereum-sepolia-rpc.publicnode.com",
+      "https://sepolia.drpc.org",
+      "https://rpc.sepolia.org"
+    ];
 
-  await connectMetaMaskSepolia();
-
-  const contractWrite = new ethers.Contract(caddr, ABI, signer);
-
-  setPayStatus("Chờ bạn bấm Confirm trên MetaMask...");
-  const tx = await contractWrite.payInvoice(idNum, { value: remainWei });
-
-  setPayStatus("Đã gửi giao dịch. Đang chờ mining...");
-  await tx.wait();
-
-  setPayStatus("Thanh toán thành công ✅");
-}
+    async function getWorkingProvider() {
+      for (const url of RPCS) {
+        try {
+          const p = new ethers.JsonRpcProvider(url);
+          await p.getBlockNumber();
+          console.log("Using RPC:", url);
+          return p;
+        } catch (e) {
+          console.warn("RPC failed:", url, e);
+        }
+      }
+      throw new Error("Không gọi được RPC Sepolia từ trình duyệt. Hãy đổi mạng hoặc dùng RPC riêng (Alchemy/Infura).");
+    }
 
     async function main() {
       const params = new URLSearchParams(location.search);
@@ -168,42 +170,38 @@ async function payNow(caddr, idNum, remainWei) {
       if (!caddr || !ethers.isAddress(caddr)) return setError("Thiếu hoặc sai contract address (tham số ?c=...).");
       if (!id || isNaN(Number(id))) return setError("Thiếu hoặc sai mã phiếu (tham số ?id=...).");
 
-      // Sepolia RPC public (có thể đổi nếu muốn)
-      // ✅ RPC fallback (cái nào chạy được thì dùng)
-const RPCS = [
-  "https://ethereum-sepolia-rpc.publicnode.com",
-  "https://sepolia.drpc.org",
-  "https://rpc.sepolia.org"
-];
+      // ===== UI: nếu không có provider thì chuyển sang nút OpenMM =====
+      const hasProvider = typeof window.ethereum !== "undefined";
+      const btnPay = $("btnPay");
+      const btnOpenMM = $("btnOpenMM");
 
-async function getWorkingProvider() {
-  for (const url of RPCS) {
-    try {
-      const p = new ethers.JsonRpcProvider(url);
-      await p.getBlockNumber(); // test kết nối
-      console.log("Using RPC:", url);
-      return p;
-    } catch (e) {
-      console.warn("RPC failed:", url, e);
-    }
-  }
-  throw new Error("Không gọi được RPC Sepolia từ trình duyệt. Hãy đổi mạng hoặc dùng RPC riêng (Alchemy/Infura).");
-}
+      btnOpenMM.onclick = openInMetaMask;
 
-setStatus("Đang kết nối RPC Sepolia...");
-const provider = await getWorkingProvider();
+      if (!hasProvider) {
+        // Ẩn nút thanh toán (vì bấm cũng lỗi)
+        btnPay.classList.add("btnDisabled");
+        btnPay.disabled = true;
 
+        // Hiện nút mở MetaMask
+        btnOpenMM.style.display = "inline-block";
+
+        setPayError("Bạn đang mở bằng trình duyệt thường. Hãy bấm “Mở trang này trong MetaMask” để thanh toán.");
+        // Nếu bạn muốn auto nhảy luôn, mở dòng dưới:
+        // setTimeout(openInMetaMask, 600);
+      } else {
+        // Có MetaMask => ẩn nút OpenMM
+        btnOpenMM.style.display = "none";
+      }
+
+      setStatus("Đang kết nối RPC Sepolia...");
+      const provider = await getWorkingProvider();
       const contract = new ethers.Contract(caddr, ABI, provider);
-const idNum = BigInt(id); // dùng BigInt cho chắc
+      const idNum = BigInt(id);
 
       setStatus("Đang tải dữ liệu phiếu từ blockchain...");
       const r = await contract.ChiTietPhieuMuaPublic(idNum);
 
-
-
-      // r là tuple theo ABI
       $("content").style.display = "block";
-
       $("owner").textContent = r.chuSoHuu;
       $("name").textContent = r.tenKhachHang;
       $("phone").textContent = r.soDienThoai;
@@ -214,68 +212,67 @@ const idNum = BigInt(id); // dùng BigInt cho chắc
 
       const rows = $("rows");
       rows.innerHTML = "";
-
-      const names = r.danhSachSanPham;
-      const prices = r.giaSanPham;
-      const months = r.BaoHanhTheoThang;
-
-      for (let i = 0; i < names.length; i++) {
+      for (let i = 0; i < r.danhSachSanPham.length; i++) {
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${i+1}</td>
-          <td>${names[i]}</td>
-          <td>${fmtVND(prices[i])}</td>
-          <td>${months[i].toString()}</td>
+          <td>${r.danhSachSanPham[i]}</td>
+          <td>${fmtVND(r.giaSanPham[i])}</td>
+          <td>${r.BaoHanhTheoThang[i].toString()}</td>
         `;
         rows.appendChild(tr);
       }
-// ====== PAYMENT UI ======
-const btnPay = $("btnPay");
-btnPay.disabled = false;
-btnPay.style.opacity = "1";
-setPayError("");
-setPayStatus("");
 
-if (r.dangTranhChap) {
-  $("remain").textContent = "Phiếu đang tranh chấp — không cho thanh toán";
-  btnPay.disabled = true;
-  btnPay.style.opacity = "0.6";
-} else {
-  // load số tiền còn lại
-  let remainWei = await loadRemain(contract, idNum);
+      // ===== Payment logic =====
+      setPayStatus("");
+      if (r.dangTranhChap) {
+        $("remain").textContent = "Phiếu đang tranh chấp — không cho thanh toán";
+        btnPay.disabled = true;
+        btnPay.classList.add("btnDisabled");
+      } else {
+        let remainWei = await loadRemain(contract, idNum);
 
-  if (remainWei === 0n) {
-    setPayStatus("Phiếu đã thanh toán đủ ✅");
-    btnPay.disabled = true;
-    btnPay.style.opacity = "0.6";
-  } else {
-    btnPay.onclick = async () => {
-      try {
-        // đọc lại remain trước khi trả (tránh trường hợp người khác vừa trả)
-        remainWei = await loadRemain(contract, idNum);
         if (remainWei === 0n) {
           setPayStatus("Phiếu đã thanh toán đủ ✅");
           btnPay.disabled = true;
-          btnPay.style.opacity = "0.6";
-          return;
-        }
+          btnPay.classList.add("btnDisabled");
+        } else {
+          btnPay.onclick = async () => {
+            try {
+              setPayError("");
+              setPayStatus("");
 
-        await payNow(caddr, idNum, remainWei);
+              if (typeof window.ethereum === "undefined") {
+                // không có provider thì mở MetaMask luôn
+                openInMetaMask();
+                return;
+              }
 
-        // refresh remain sau khi trả
-        remainWei = await loadRemain(contract, idNum);
-        if (remainWei === 0n) {
-          btnPay.disabled = true;
-          btnPay.style.opacity = "0.6";
+              // đọc lại remain trước khi trả
+              remainWei = await loadRemain(contract, idNum);
+              if (remainWei === 0n) {
+                setPayStatus("Phiếu đã thanh toán đủ ✅");
+                btnPay.disabled = true;
+                btnPay.classList.add("btnDisabled");
+                return;
+              }
+
+              await payNow(caddr, idNum, remainWei);
+
+              // refresh remain
+              remainWei = await loadRemain(contract, idNum);
+              if (remainWei === 0n) {
+                btnPay.disabled = true;
+                btnPay.classList.add("btnDisabled");
+              }
+            } catch (e) {
+              console.error(e);
+              setPayError(e?.shortMessage || e?.message || String(e));
+              setPayStatus("Thanh toán lỗi ❌");
+            }
+          };
         }
-      } catch (e) {
-        console.error(e);
-        setPayError(e?.shortMessage || e?.message || String(e));
-        setPayStatus("Thanh toán lỗi ❌");
       }
-    };
-  }
-}
 
       setStatus("Tải xong ✅");
     }
@@ -288,8 +285,3 @@ if (r.dangTranhChap) {
   </script>
 </body>
 </html>
-
-
-
-
-
