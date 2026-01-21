@@ -56,6 +56,12 @@
     const mm = "https://metamask.app.link/dapp/" + currentUrl.replace(/^https?:\/\//, "");
     window.location.href = mm;
   }
+function openInMetaMask() {
+  const url = location.href;                   // url hiện tại đã có ?c=...&id=...
+  const noProto = url.replace(/^https?:\/\//, "");
+  const mmUrl = `https://metamask.app.link/dapp/${noProto}`;
+  location.href = mmUrl;
+}
 
   document.getElementById("btnOpenMM").onclick = openInMetaMask;
 
@@ -142,7 +148,14 @@ async function loadRemain(contractRead, idNum) {
 
 async function payNow(caddr, idNum, remainWei) {
   setPayError("");
-  setPayStatus("Đang mở MetaMask để thanh toán...");
+  setPayStatus("Đang chuẩn bị thanh toán...");
+
+  // Nếu đang ở Chrome (không có provider), tự nhảy sang MetaMask Browser
+  if (!window.ethereum) {
+    setPayStatus("Đang mở trong MetaMask...");
+    openInMetaMask();
+    return;
+  }
 
   await connectMetaMaskSepolia();
 
@@ -156,6 +169,7 @@ async function payNow(caddr, idNum, remainWei) {
 
   setPayStatus("Thanh toán thành công ✅");
 }
+
 
     async function main() {
       const params = new URLSearchParams(location.search);
@@ -288,6 +302,7 @@ if (r.dangTranhChap) {
   </script>
 </body>
 </html>
+
 
 
 
